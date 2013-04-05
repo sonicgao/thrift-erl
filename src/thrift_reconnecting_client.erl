@@ -26,7 +26,8 @@
           get_stats/1,
           get_and_reset_stats/1 ]).
 
--export([ start_link/6 ]).
+-export([ start_link/6,
+          start_link/1 ]).
 
 %% gen_server callbacks
 -export([ init/1,
@@ -62,6 +63,9 @@ start_link( Host, Port,
                            ThriftSvc, ThriftOpts,
                            ReconnMin, ReconnMax ],
                          [] ).
+
+start_link(Args) ->
+  gen_server:start_link(?MODULE, Args, []).
 
 call( Pid, Op, Args ) ->
   gen_server:call( Pid, { call, Op, Args } ).
