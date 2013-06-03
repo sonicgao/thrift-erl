@@ -96,6 +96,7 @@ init( [ Host, Port, TSvc, TOpts, ReconnMin, ReconnMax ] ) ->
                   thrift_opts  = TOpts,
                   reconn_min   = ReconnMin,
                   reconn_max   = ReconnMax,
+                  reconn_time  = 0,
                   op_cnt_dict  = dict:new(),
                   op_time_dict = dict:new() },
 
@@ -195,11 +196,12 @@ try_connect( State = #state{ client      = OldClient,
     _   -> ( catch thrift_client:close( OldClient ) )
   end,
 
-  case catch thrift_client_util:new( Host, Port, TSvc, TOpts ) of
+  try thrift_client_util:new( Host, Port, TSvc, TOpts ) of
     { ok, Client } ->
-      State#state{ client = Client, reconn_time = 0 };
-    { E, Msg } when E == error; E == exception ->
+      State#state{ client = Client, reconn_time = 0 }
+  catch _:Msg -> %%when E == error; E == exception ->
       ReconnTime = reconn_time( State ),
+%      error_logger:error_msg("Reconnecint ~p~n", [MM]),
       error_logger:error_msg( "[~w] ~w connect failed (~w), trying again in ~w ms~n",
                               [ self(), TSvc, Msg, ReconnTime ] ),
       erlang:send_after( ReconnTime, self(), try_connect ),
