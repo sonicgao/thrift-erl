@@ -49,13 +49,11 @@ new(Module, Data) when is_atom(Module) ->
     {ok, #protocol{module = Module,
                    data = Data}}.
 
--spec flush_transport(#protocol{}) -> {#protocol{}, ok}.
 flush_transport(Proto = #protocol{module = Module,
                                   data = Data}) ->
     {NewData, Result} = Module:flush_transport(Data),
     {Proto#protocol{data = NewData}, Result}.
 
--spec close_transport(#protocol{}) -> ok.
 close_transport(#protocol{module = Module,
                           data = Data}) ->
     Module:close_transport(Data).
