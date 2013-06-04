@@ -100,7 +100,7 @@ init( [ Host, Port, TSvc, TOpts, ReconnMin, ReconnMax ] ) ->
                   op_cnt_dict  = dict:new(),
                   op_time_dict = dict:new() },
 
-  { ok, try_connect( State ) }.
+  {ok, State, 0}.
 
 %%--------------------------------------------------------------------
 %% Function: %% handle_call(Request, From, State) -> {reply, Reply, State} |
@@ -155,6 +155,12 @@ handle_call( get_and_reset_stats,
 handle_cast( _Msg, State ) ->
   { noreply, State }.
 
+handle_info(timeout, State) ->
+  {noreply, try_connect(State)};
+
+handle_info(try_connect, State) ->
+  {noreply, try_connect(State)};
+
 %%--------------------------------------------------------------------
 %% Function: handle_info(Info, State) -> {noreply, State} |
 %%                                       {noreply, State, Timeout} |
@@ -199,9 +205,8 @@ try_connect( State = #state{ client      = OldClient,
   try thrift_client_util:new( Host, Port, TSvc, TOpts ) of
     { ok, Client } ->
       State#state{ client = Client, reconn_time = 0 }
-  catch _:Msg -> %%when E == error; E == exception ->
+  catch _:Msg ->
       ReconnTime = reconn_time( State ),
-%      error_logger:error_msg("Reconnecint ~p~n", [MM]),
       error_logger:error_msg( "[~w] ~w connect failed (~w), trying again in ~w ms~n",
                               [ self(), TSvc, Msg, ReconnTime ] ),
       erlang:send_after( ReconnTime, self(), try_connect ),
