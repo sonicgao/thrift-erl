@@ -118,23 +118,8 @@ handle_call( { call, Op, _ },
 
 handle_call( { call, Op, Args },
              _From,
-             State=#state{ client = Client } ) ->
-
-  Start = now(),
-  Result = ( catch thrift_client:call( Client, Op, Args) ),
-  Time = timer:now_diff( now(), Start ),
-
-  case Result of
-    { C, { ok, Reply } } ->
-      S = incr_stats( Op, "success", Time, State#state{ client = C } ),
-      { reply, {ok, Reply }, S };
-    { _, { E, Msg } } when E == error; E == exception ->
-      S = incr_stats( Op, "error", Time, try_connect( State ) ),
-      { reply, { E, Msg }, S };
-    Other ->
-      S = incr_stats( Op, "error", Time, try_connect( State ) ),
-      { reply, Other, S }
-  end;
+             State) ->
+    exec_call(Op, Args, State, true) ;
 
 handle_call( get_stats,
              _From,
@@ -153,7 +138,7 @@ handle_call( get_and_reset_stats,
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
 handle_cast( _Msg, State ) ->
-  { noreply, State }.
+  { noreply, State}.
 
 handle_info(timeout, State) ->
   {noreply, try_connect(State)};
@@ -225,6 +210,28 @@ reconn_time( #state{ reconn_max = ReconnMax, reconn_time = R } ) ->
     false -> Backoff
   end.
 
+exec_call(Op, Args, State=#state{ client = Client }, Retry) ->
+  Start = now(),
+  Result = ( catch thrift_client:call( Client, Op, Args) ),
+  Time = timer:now_diff( now(), Start ),
+
+  case Result of
+    { C, { ok, Reply } } ->
+      S = incr_stats( Op, "success", Time, State#state{ client = C } ),
+      { reply, {ok, Reply }, S };
+    { _, { E, Msg } } when E == error; E == exception ->
+      S = incr_stats( Op, "error", Time, try_connect( State ) ),
+       case Retry of
+           true -> exec_call(Op, Args, S, false);
+           false -> { reply, { E, Msg }, S }
+       end;
+    Other ->
+      S = incr_stats( Op, "error", Time, try_connect( State ) ),
+       case Retry of
+           true -> exec_call(Op, Args, S, false);
+           false ->       { reply, Other, S }
+       end
+  end.
 
 incr_stats( Op, Result, Time,
             State = #state{ op_cnt_dict  = OpCntDict,
