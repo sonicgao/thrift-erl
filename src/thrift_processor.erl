@@ -33,7 +33,7 @@ init({_Server, ProtoGen, Service, Handler}) when is_function(ProtoGen, 0) ->
                            handler = Handler}).
 
 loop(State0 = #thrift_processor{protocol  = Proto0,
-                                handler = Handler}) ->
+                                handler = {_HandleFun, HandleError}}) ->
     {Proto1, MessageBegin} = thrift_protocol:read(Proto0, message_begin),
     State1 = State0#thrift_processor{protocol = Proto1},
     case MessageBegin of
@@ -43,7 +43,7 @@ loop(State0 = #thrift_processor{protocol  = Proto0,
             case handle_function(State1, list_to_atom(Function), Seqid) of
                 {State2, ok} -> loop(State2);
                 {_State2, {error, Reason}} ->
-                    Handler:handle_error(list_to_atom(Function), Reason),
+                    HandleError(list_to_atom(Function), Reason),
                     thrift_protocol:close_transport(Proto1),
                     ok
             end;
@@ -53,27 +53,27 @@ loop(State0 = #thrift_processor{protocol  = Proto0,
             case handle_function(State1, list_to_atom(Function), Seqid) of
                 {State2, ok} -> loop(State2);
                 {_State2, {error, Reason}} ->
-                    Handler:handle_error(list_to_atom(Function), Reason),
+                    HandleError(list_to_atom(Function), Reason),
                     thrift_protocol:close_transport(Proto1),
                     ok
             end;
         {error, timeout = Reason} ->
-            Handler:handle_error(undefined, Reason),
+            HandleError(undefined, Reason),
             thrift_protocol:close_transport(Proto1),
             ok;
         {error, closed = Reason} ->
             %% error_logger:info_msg("Client disconnected~n"),
-            Handler:handle_error(undefined, Reason),
+            HandleError(undefined, Reason),
             thrift_protocol:close_transport(Proto1),
             exit(shutdown);
         {error, Reason} ->
-            Handler:handle_error(undefined, Reason),
+            HandleError(undefined, Reason),
             thrift_protocol:close_transport(Proto1),
             exit(shutdown)
     end.
 
 handle_function(State0=#thrift_processor{protocol = Proto0,
-                                         handler = Handler,
+                                         handler = {HandleFun, _HandleError},
                                          service = Service},
                 Function,
                 Seqid) ->
@@ -83,7 +83,7 @@ handle_function(State0=#thrift_processor{protocol = Proto0,
     State1 = State0#thrift_processor{protocol = Proto1},
 
     try
-        Result = Handler:handle_function(Function, Params),
+        Result = HandleFun(Function, Params),
         %% {Micro, Result} = better_timer(Handler, handle_function, [Function, Params]),
         %% error_logger:info_msg("Processed ~p(~p) in ~.4fms~n",
         %%                       [Function, Params, Micro/1000.0]),
