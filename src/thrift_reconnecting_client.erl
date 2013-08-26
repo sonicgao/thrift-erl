@@ -177,6 +177,7 @@ code_change( _OldVsn, State, _Extra ) ->
 %%% Internal functions
 %%--------------------------------------------------------------------
 try_connect( State = #state{ client      = OldClient,
+                             reconn_min  = ReconnMin, 
                              host        = Host,
                              port        = Port,
                              thrift_svc  = TSvc,
@@ -192,8 +193,11 @@ try_connect( State = #state{ client      = OldClient,
       State#state{ client = Client, reconn_time = 0 }
   catch _:Msg ->
       ReconnTime = reconn_time( State ),
-      error_logger:error_msg( "[~w] ~w connect failed (~w), trying again in ~w ms~n",
-                              [ self(), TSvc, Msg, ReconnTime ] ),
+      case ReconnTime =< ReconnMin of
+          true -> error_logger:error_msg( "[~w] ~w failed connect to ~w:~p (~w)",
+                              [ self(), TSvc, Host, Port, Msg] );
+          _ -> ok
+      end,
       erlang:send_after( ReconnTime, self(), try_connect ),
       State#state{ client = nil, reconn_time = ReconnTime }
   end.
