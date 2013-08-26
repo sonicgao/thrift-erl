@@ -190,11 +190,12 @@ try_connect( State = #state{ client      = OldClient,
 
   try thrift_client_util:new( Host, Port, TSvc, TOpts ) of
     { ok, Client } ->
-      State#state{ client = Client, reconn_time = 0 }
+        error_logger:info_msg("[~w] ~w connected to ~s:~p", [self(), TSvc, Host, Port]),     
+        State#state{ client = Client, reconn_time = 0 }
   catch _:Msg ->
       ReconnTime = reconn_time( State ),
       case ReconnTime =< ReconnMin of
-          true -> error_logger:error_msg( "[~w] ~w failed connect to ~w:~p (~w)",
+          true -> error_logger:error_msg( "[~w] ~w failed connect to ~s:~p (~w)",
                               [ self(), TSvc, Host, Port, Msg] );
           _ -> ok
       end,
