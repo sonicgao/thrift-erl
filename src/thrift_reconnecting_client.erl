@@ -224,11 +224,13 @@ exec_call(Op, Args, State=#state{ client = Client }, Retry) ->
     { C, { ok, Reply } } ->
       S = incr_stats( Op, "success", Time, State#state{ client = C } ),
       { reply, {ok, Reply }, S };
-    { _, { E, Msg } } when E == error; E == exception ->
+    {C, {exception, _}=Exc} ->
+      {reply, Exc, State#state{client = C}};
+    { _, { E, Msg } } when E == error; E == 'EXIT' ->
       S = incr_stats( Op, "error", Time, try_connect( State ) ),
        case Retry of
            true -> exec_call(Op, Args, S, false);
-           false -> { reply, { E, Msg }, S }
+           false -> { reply, {E, Msg}, S }
        end;
     Other ->
       S = incr_stats( Op, "error", Time, try_connect( State ) ),
