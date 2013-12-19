@@ -68,7 +68,7 @@ start_link(Args) ->
   gen_server:start_link(?MODULE, Args, []).
 
 call( Pid, Op, Args ) ->
-  gen_server:call( Pid, { call, Op, Args } ).
+  gen_server:call( Pid, { call, Op, Args }, infinity).
 
 get_stats( Pid ) ->
   gen_server:call( Pid, get_stats ).
