@@ -146,8 +146,13 @@ read(IProto0, {list, Type}) ->
 read(IProto0, {map, KeyType, ValType}) ->
     {IProto1, #protocol_map_begin{size = Size, ktype = KType, vtype = VType}} =
         read(IProto0, map_begin),
-    {KType, KType} = {term_to_typeid(KeyType), KType},
-    {VType, VType} = {term_to_typeid(ValType), VType},
+    %io:format("KeyType=~p~n", [KeyType]),
+    % must handle compact protocol empty maps
+    % KType and VType are 0 in that case just use the result of term_to_type_id
+    {KType0, KType} = {term_to_typeid(KeyType), KType},
+    {VType0, VType} = {term_to_typeid(ValType), VType},
+    {KType0, KType0} = {KType0, case KType of 0 -> KType0; _ -> KType end},
+    {VType0, VType0} = {VType0, case VType of 0 -> VType0; _ -> VType end},
     {List, IProto2} = lists:mapfoldl(fun(_, ProtoS0) ->
                                              {ProtoS1, {ok, Key}} = read(ProtoS0, KeyType),
                                              {ProtoS2, {ok, Val}} = read(ProtoS1, ValType),
@@ -388,6 +393,7 @@ write(Proto = #protocol{module = Module,
     {Proto#protocol{data = NewData}, Result}.
 
 struct_write_loop(Proto0, [{Fid, Type} | RestStructDef], [Data | RestData]) ->
+
     NewProto = case Data of
                    undefined ->
                        Proto0; % null fields are skipped in response
