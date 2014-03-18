@@ -127,48 +127,59 @@ write(This=#compact_protocol{
 
 %%% Write field
 write(This, Field=#protocol_field_begin{type = Type}) when Type =:= ?tType_BOOL ->
+  %lager:debug("write_bool_field(~p)", [Field]),
   {This#compact_protocol{boolean_field = Field}, ok};
 write(This, Field=#protocol_field_begin{}) ->
   %lager:debug("write_field(~p)", [Field]),
   write_field_begin_internal(This, Field, -1);
   %write_many(This, [{byte, Type}, {i16, Id}]);
 
-write(This, field_stop) -> write(This, {byte, ?tType_STOP});
-write(This, field_end) -> {This, ok};
+write(This, field_stop) ->
+  %lager:debug("write_field_stop"),
+  write(This, {byte, ?tType_STOP});
+write(This, field_end) ->
+  %lager:debug("write_field_stop"),
+  {This, ok};
 
 %%% Write map
-write(This, #protocol_map_begin{
+write(This, M=#protocol_map_begin{
     ktype = _KType,
     vtype = _VType,
     size = 0}) ->
+  %lager:debug("write_map(~p)", [M]),
   write(This, {byte, 0});
-write(This, #protocol_map_begin{
+write(This, M=#protocol_map_begin{
     ktype = KType,
     vtype = VType,
     size = Size}) ->
-  %lager:info("MAP SIZE: ~p", [Size]),
+  %lager:debug("write_empty_map(~p)", [M]),
   TwoTypes = (get_compact_type(KType) bsl 4) bor get_compact_type(VType),
   write_many(This, [{varint, Size}, {byte, TwoTypes}]);
 
 write(This, map_end) ->
+  %lager:debug("write_map_end"),
   {This, ok};
 
 %%% Write boolean
 write(This=#compact_protocol{
       boolean_field = undefined
     }, {bool, Value}) ->
+  %lager:debug("write_bool(~p)", [undefined]),
   OutVal = case Value of
     true -> ?Types_BOOLEAN_TRUE;
     false -> ?Types_BOOLEAN_FALSE
   end,
+  %lager:debug("write_bool(~p)", [OutVal]),
   write(This, {byte, OutVal});
 write(This=#compact_protocol{
       boolean_field = BoolField
     }, {bool, Value}) ->
+  %lager:debug("write_bool(~p)", [BoolField]),
   OutType = case Value of
     true -> ?Types_BOOLEAN_TRUE;
     false -> ?Types_BOOLEAN_FALSE
   end,
+  %lager:debug("write_bool(~p)", [OutType]),
   {This1, Ret} = write_field_begin_internal(This, BoolField, OutType),
   {This1#compact_protocol{
     boolean_field = undefined
@@ -251,9 +262,9 @@ read(This, message_begin) ->
         ?VERSION ->
           Type = (VerAndType bsr ?TYPE_SHIFT_AMOUNT) band 3,
           {This3, {ok, SeqId}} = read(This2, varint),
-          {This4, MsgName} = read(This3, string),
+          {This4, {ok, MsgName}} = read(This3, string),
           {This4, #protocol_message_begin{
-            name = MsgName,
+            name = binary_to_list(MsgName),
             type = Type,
             seqid = SeqId
           }};
@@ -347,7 +358,7 @@ read(This, map_begin) ->
           {This2, {ok, KV}} = read(This1, byte),
           {This2, KV}
       end,
-      %lager:info("K ~p V ~p S ~p", [KVType bsr 4, KVType band 16#0f, Size]),
+      %lager:debug("K ~p V ~p S ~p", [KVType bsr 4, KVType band 16#0f, Size]),
       {This3, #protocol_map_begin{
         ktype = get_ttype(KVType bsr 4),
         vtype = get_ttype(KVType band 16#0f),
@@ -400,12 +411,14 @@ read(This, set_begin) ->
 read(This, set_end) ->
   {This, ok};
 
+% returns a binary directly, call binary_to_list if necessary
 read(This, string) ->
   %lager:debug("read_string"),
   {This1, Initial} = read_varint(This),
   case Initial of
     {ok, Len} ->
       read_binary(This1, Len);
+      %{This2, {ok, binary_to_list(Bin)}};
     Other ->
       {This1, Other}
   end;
@@ -584,13 +597,19 @@ write_field_begin_internal(This=#compact_protocol{
     },
     _Field=#protocol_field_begin{type = FType, id = FId},
     TypeOverride) ->
+  %lager:debug("write_field_begin_internal(~p)", [_Field]),
+  %lager:debug("write_field_begin_internal(~p)", [TypeOverride]),
   ActualType = case TypeOverride == -1 of
     true -> get_compact_type(FType);
     false -> TypeOverride
   end,
+  %lager:debug("write_field_begin_internal(~p) ActualType", [ActualType]),
+  %lager:debug("write_field_begin_internal(~p) FId", [FId]),
+  %lager:debug("write_field_begin_internal(~p) LastFieldId", [LastFieldId]),
+  %lager:debug("write_field_begin_internal(~p) (FId - LastFieldId) bsl 4 bor ActualType", [(FId - LastFieldId) bsl 4 bor ActualType]),
   {This1, Ret} = case FId > LastFieldId andalso (FId - LastFieldId) =< 15 of
     true ->
-      write(This, (FId - LastFieldId) bsl 4 bor ActualType);
+      write(This, {byte, (FId - LastFieldId) bsl 4 bor ActualType});
     false ->
       write_many(This, [{byte, ActualType}, {i16, FId}])
   end,
