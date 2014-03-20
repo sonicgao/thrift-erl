@@ -112,7 +112,9 @@ read(IProto0, {struct, Structure}, Tag)
               end,
 
     {IProto2, RTuple2} = read_struct_loop(IProto1, SDict, RTuple1),
-    {IProto2, {ok, RTuple2}}.
+    {IProto3, ok} = read(IProto2, struct_end),
+
+    {IProto3, {ok, RTuple2}}.
 
 
 %% NOTE: Keep this in sync with thrift_protocol_behaviour:read
